@@ -1,0 +1,20 @@
+[
+  {
+    "moneda": "USD",
+    "fuente": "oficial",
+    "nombre": "Dólar",
+    "compra": null,
+    "venta": null,
+    "promedio": 857.8876,
+    "fechaActualizacion": "2026-09-29T00:00:00-04:00"
+  },
+  {
+    "moneda": "EUR",
+    "fuente": "oficial",
+    "nombre": "Euro",
+    "compra": null,
+    "venta": null,
+    "promedio": 974.71473336,
+    "fechaActualizacion": "2026-09-29T00:00:00-04:00"
+  }
+]

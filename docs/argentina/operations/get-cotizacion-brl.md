@@ -1,0 +1,52 @@
+---
+aside: false
+outline: false
+title: Real Brasileño
+---
+
+<script setup>
+import { setRegionForSidebar } from '../../.vitepress/sidebar/sidebar.utils.js'
+
+const spec = setRegionForSidebar('ar')
+</script>
+
+<OAOperation :spec="spec" operationId="get-cotizacion-brl" :hide-branding="false">
+
+<template #description="description">
+
+Cotización del Real Brasileño en el mercado.
+
+<DataSources :sources="description.operation['x-data-source']" />
+
+</template>
+
+<template #footer>
+
+<!--@include: ./parts/get-cotizacion-brl-footer.md -->
+
+</template>
+
+</OAOperation>
+
+<llm-only>
+
+## GET /v1/cotizaciones/brl
+
+Real Brasileño
+
+Cotización del Real Brasileño en el mercado.
+
+### Servers
+
+- https://dolarapi.com — Producción
+
+### Responses
+
+- `200` — Devuelve la cotización del Real Brasileño
+
+### OpenAPI
+
+Source of truth for paths and schemas: https://dolarapi.com/openapi.json
+
+</llm-only>
+

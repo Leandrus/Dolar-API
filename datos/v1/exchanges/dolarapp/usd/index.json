@@ -1,0 +1,11 @@
+[
+  {
+    "exchange": "dolarapp",
+    "moneda": "ARS",
+    "monedaBase": "USD",
+    "criptomoneda": null,
+    "criptomonedaBase": "USDC",
+    "compra": 1563.35,
+    "venta": 1560.9375
+  }
+]

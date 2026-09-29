@@ -1,0 +1,16 @@
+[
+  {
+    "exchange": "belo",
+    "moneda": "BRAt",
+    "monedaBase": "BOLt",
+    "compra": 0.5332020945177114,
+    "venta": 0.5085829336296296
+  },
+  {
+    "exchange": "belo",
+    "moneda": "BRAt",
+    "monedaBase": "BOLt",
+    "compra": 0.5085829336296297,
+    "venta": 0.5332020945177114
+  }
+]

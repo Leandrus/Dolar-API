@@ -1,0 +1,20 @@
+[
+  {
+    "exchange": "belo",
+    "moneda": "PERt",
+    "monedaBase": "USD",
+    "criptomoneda": null,
+    "criptomonedaBase": "USDT",
+    "compra": 3.4482758620689653,
+    "venta": 3.32
+  },
+  {
+    "exchange": "belo",
+    "moneda": "PERt",
+    "monedaBase": "USD",
+    "criptomoneda": null,
+    "criptomonedaBase": "USDC",
+    "compra": 3.4552095344827585,
+    "venta": 3.31667751
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "exchange": "belo",
+    "moneda": "BRAt",
+    "monedaBase": "COLt",
+    "compra": 0.001618364047588864,
+    "venta": 0.001532005037037037
+  },
+  {
+    "exchange": "belo",
+    "moneda": "BRAt",
+    "monedaBase": "COLt",
+    "compra": 0.001532005037037037,
+    "venta": 0.001618364047588864
+  }
+]

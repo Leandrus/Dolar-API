@@ -1,0 +1,20 @@
+[
+  {
+    "exchange": "belo",
+    "moneda": "ARGt",
+    "monedaBase": "USD",
+    "criptomoneda": null,
+    "criptomonedaBase": "USDT",
+    "compra": 1581,
+    "venta": 1561
+  },
+  {
+    "exchange": "belo",
+    "moneda": "ARGt",
+    "monedaBase": "USD",
+    "criptomoneda": null,
+    "criptomonedaBase": "USDC",
+    "compra": 1584.179019465,
+    "venta": 1559.43782925
+  }
+]

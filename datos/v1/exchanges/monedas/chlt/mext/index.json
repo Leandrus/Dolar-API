@@ -1,0 +1,16 @@
+[
+  {
+    "exchange": "belo",
+    "moneda": "MEXt",
+    "monedaBase": "CHLt",
+    "compra": 0.01936940797124559,
+    "venta": 0.01828038182778716
+  },
+  {
+    "exchange": "belo",
+    "moneda": "MEXt",
+    "monedaBase": "CHLt",
+    "compra": 0.01828038182778716,
+    "venta": 0.01936940797124559
+  }
+]

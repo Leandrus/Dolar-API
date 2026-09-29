@@ -1,0 +1,18 @@
+[
+  {
+    "fuente": "oficial",
+    "compra": null,
+    "venta": null,
+    "promedio": 844.75381302,
+    "fecha": "2026-07-28",
+    "moneda": "EUR"
+  },
+  {
+    "fuente": "paralelo",
+    "compra": null,
+    "venta": null,
+    "promedio": 952.062045,
+    "fecha": "2026-07-28",
+    "moneda": "EUR"
+  }
+]
