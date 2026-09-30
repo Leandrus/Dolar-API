@@ -29,3 +29,6 @@ dist-ssr
 .env
 docs/.vitepress/cache
 docs/.vitepress/.temp
+
+# Archivo de caché de la API Venezuela
+cache.json

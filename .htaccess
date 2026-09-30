@@ -1,0 +1,16 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Proteger archivo de caché para que no sea accesible vía navegador
+    <Files "cache.json">
+        Require all denied
+    </Files>
+
+    # Si el archivo o carpeta existe, no reescribir
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Redirigir todas las peticiones a index.php manteniendo parámetros GET
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
