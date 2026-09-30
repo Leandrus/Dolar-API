@@ -1,0 +1,61 @@
+# API Dólar y Euro Venezuela
+> API pública y ligera para consultar cotizaciones oficiales (Banco Central de Venezuela - BCV) y mercado paralelo en Venezuela (USD y EUR).
+
+- Base URL: https://api-dolar.leandrus.net
+- Formato de respuesta: JSON (UTF-8)
+- Autenticación: Ninguna (Acceso libre)
+- CORS: Habilitado (Access-Control-Allow-Origin: *)
+- Frecuencia de actualización: Caché inteligente de 15 minutos con tolerancia a caídas.
+
+## Endpoints
+
+### 1. Cotizaciones de Dólares
+- GET /v1/dolares
+  Retorna una lista con las cotizaciones oficiales (BCV) y paralelas del Dólar estadounidense en Bolívares (VES).
+  Ejemplo de respuesta:
+  ```json
+  [
+    {
+      "moneda": "USD",
+      "fuente": "oficial",
+      "nombre": "Dólar",
+      "compra": null,
+      "venta": null,
+      "promedio": 859.0629,
+      "fechaActualizacion": "2026-09-30T00:00:00-04:00"
+    },
+    {
+      "moneda": "USD",
+      "fuente": "paralelo",
+      "nombre": "Paralelo",
+      "compra": null,
+      "venta": null,
+      "promedio": 955.8631,
+      "fechaActualizacion": "2026-09-30T15:00:00.000Z"
+    }
+  ]
+  ```
+
+- GET /v1/dolares/oficial
+  Retorna únicamente el objeto con la cotización oficial del BCV para USD.
+
+- GET /v1/dolares/paralelo
+  Retorna únicamente el objeto con la cotización del mercado paralelo para USD.
+
+### 2. Cotizaciones de Euros
+- GET /v1/euros
+  Retorna una lista con las cotizaciones oficiales (BCV) y paralelas del Euro (EUR) en Bolívares (VES).
+
+- GET /v1/euros/oficial
+  Retorna únicamente la cotización oficial del BCV para EUR.
+
+- GET /v1/euros/paralelo
+  Retorna únicamente la cotización paralela para EUR.
+
+### 3. Cotizaciones Oficiales BCV
+- GET /v1/cotizaciones
+  Retorna una lista con las dos monedas oficiales del BCV (Dólar y Euro).
+
+## Fuentes de Datos
+- Oficial: Banco Central de Venezuela (https://www.bcv.org.ve/)
+- Paralelo: API de Yadio (https://api.yadio.io/)

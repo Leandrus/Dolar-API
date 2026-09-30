@@ -1,3 +1,0 @@
-## Ejemplos de uso
-
-<ExchangesTable />

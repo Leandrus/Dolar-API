@@ -1,14 +1,22 @@
 <?php
 /**
  * API Dólar y Euro Venezuela
- * Optimizado para Hosting Compartido (Hostinger / Apache / LiteSpeed)
- * Subdominio: api-dolar.leandrus.net
+ * Cotizaciones oficiales del BCV y mercado paralelo
+ * Repositorio: https://github.com/Leandrus/Dolar-API
+ * Licencia: MIT
  */
 
-// 1. Configuración de cabeceras CORS
+// Evitar que errores o notices de PHP rompan la salida JSON
+error_reporting(0);
+ini_set('display_errors', '0');
+
+// 1. Cabeceras de Seguridad y CORS
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('Referrer-Policy: strict-origin-when-cross-origin');
 
 // Responder peticiones pre-flight de navegadores (CORS)
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -16,20 +24,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
+// Únicamente permitir método GET
+if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
+    header('Allow: GET, OPTIONS');
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(405);
+    echo json_encode([
+        'error' => 405,
+        'mensaje' => 'Método HTTP no permitido. Utilice GET.'
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 header('Content-Type: application/json; charset=utf-8');
 
 // 2. Parámetros de Caché
 define('CACHE_FILE', __DIR__ . '/cache.json');
-define('CACHE_TTL', 900); // 15 minutos (en segundos)
+define('CACHE_TTL', 900); // 15 minutos en segundos
 
-// 3. Obtener cotizaciones con caché inteligente y tolerancia a fallos
+// 3. Obtener cotizaciones con caché inteligente y tolerancia a caídas
 $data = getRatesWithCache();
 
-// 4. Procesamiento de ruta (Router simple)
+// 4. Enrutamiento de peticiones
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 $path = trim(strtolower($uri), '/');
 
-// Enrutador de endpoints
 switch ($path) {
     case 'v1/dolares':
     case 'dolares':
@@ -72,6 +91,7 @@ switch ($path) {
             'servicio' => 'API Cotizaciones Venezuela (USD & EUR)',
             'estado' => 'En línea',
             'ultima_actualizacion_cache' => $data['_cached_at'] ?? null,
+            'documentacion' => 'https://github.com/Leandrus/Dolar-API',
             'endpoints' => [
                 '/v1/dolares' => 'Cotizaciones del dólar oficial (BCV) y paralelo',
                 '/v1/dolares/oficial' => 'Cotización del dólar oficial BCV',
@@ -114,7 +134,7 @@ function getRatesWithCache() {
         $content = @file_get_contents(CACHE_FILE);
         $cached = json_decode($content, true);
 
-        // Si la caché tiene menos de 15 minutos, responder de inmediato sin llamadas externas
+        // Si la caché tiene menos de 15 minutos, responder inmediatamente
         if ($cached && isset($cached['_timestamp']) && ($now - $cached['_timestamp'] < CACHE_TTL)) {
             return $cached;
         }
@@ -124,7 +144,7 @@ function getRatesWithCache() {
     $bcv = fetchBcv();
     $yadio = fetchYadio();
 
-    // Manejo de Oficial (BCV) con tolerancia a caídas
+    // Manejo de Oficial (BCV) con tolerancia a fallos
     if (!$bcv['usd'] && $cached) {
         $dolarOficial = $cached['dolarOficial'];
         $euroOficial = $cached['euroOficial'];
@@ -150,7 +170,7 @@ function getRatesWithCache() {
         ];
     }
 
-    // Manejo de Paralelo (Yadio) con tolerancia a caídas
+    // Manejo de Paralelo (Yadio) con tolerancia a fallos
     if (!$yadio['usd'] && $cached) {
         $dolarParalelo = $cached['dolarParalelo'];
         $euroParalelo = $cached['euroParalelo'];
@@ -186,13 +206,17 @@ function getRatesWithCache() {
         'euroParalelo' => $euroParalelo
     ];
 
-    // Guardar en archivo local
-    @file_put_contents(CACHE_FILE, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    // Guardar en archivo local con bloqueo exclusivo
+    @file_put_contents(CACHE_FILE, json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
 
     return $result;
 }
 
 function fetchUrl($url, $timeout = 10) {
+    if (!function_exists('curl_init')) {
+        return null;
+    }
+
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
@@ -254,7 +278,7 @@ function fetchYadio() {
 
 function cleanNumber($str) {
     if (!$str) return null;
-    $clean = str_replace(' ', '', $str);
+    $clean = preg_replace('/[^\d.,]/', '', $str);
     $clean = str_replace(',', '.', $clean);
-    return (float)$clean;
+    return is_numeric($clean) ? (float)$clean : null;
 }

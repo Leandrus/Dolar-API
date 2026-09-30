@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Allow: /v1/
+Allow: /llms.txt
+Disallow: /cache.json

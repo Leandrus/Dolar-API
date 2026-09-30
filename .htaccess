@@ -1,16 +1,39 @@
+# ========================================================
+# Configuración Apache / LiteSpeed para API Venezuela
+# ========================================================
+
+# 1. Deshabilitar listado de directorios
+Options -Indexes
+
+# 2. Protección de archivos sensibles y ocultos
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<Files "cache.json">
+    Require all denied
+</Files>
+
+<FilesMatch "\.(bak|config|dist|fla|inc|ini|log|psd|sh|sql|sw[op])|~">
+    Require all denied
+</FilesMatch>
+
+# 3. Cabeceras de Seguridad HTTP
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "DENY"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# 4. Enrutamiento de peticiones a index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
 
-    # Proteger archivo de caché para que no sea accesible vía navegador
-    <Files "cache.json">
-        Require all denied
-    </Files>
-
-    # Si el archivo o carpeta existe, no reescribir
+    # Si el archivo o carpeta existe físicamente (ej. robots.txt, llms.txt), servirlo directamente
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
 
-    # Redirigir todas las peticiones a index.php manteniendo parámetros GET
+    # Redirigir el resto hacia index.php manteniendo parámetros GET
     RewriteRule ^(.*)$ index.php [QSA,L]
 </IfModule>
