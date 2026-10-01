@@ -6,12 +6,14 @@
 - Autenticación: Ninguna (Acceso libre)
 - CORS: Habilitado (Access-Control-Allow-Origin: *)
 - Frecuencia de actualización: Caché inteligente de 15 minutos con tolerancia a caídas.
+- Zona horaria de referencia: America/Caracas (UTC-4).
+- Vigencia oficial BCV: El portal del BCV publica alrededor de las 4:00 PM la tasa del siguiente día hábil. La API entrega la cotización del día en curso hasta la medianoche (00:00 VET), momento en el que se activa la nueva tasa oficial.
 
 ## Endpoints
 
 ### 1. Cotizaciones de Dólares
 - GET /v1/dolares
-  Retorna una lista con las cotizaciones oficiales (BCV) y paralelas del Dólar estadounidense en Bolívares (VES).
+  Retorna una lista con las cotizaciones oficiales vigentes (BCV) y paralelas del Dólar estadounidense en Bolívares (VES).
   Ejemplo de respuesta:
   ```json
   [
@@ -21,8 +23,8 @@
       "nombre": "Dólar",
       "compra": null,
       "venta": null,
-      "promedio": 859.0629,
-      "fechaActualizacion": "2026-09-30T00:00:00-04:00"
+      "promedio": 860.1753,
+      "fechaActualizacion": "2026-10-01T00:00:00-04:00"
     },
     {
       "moneda": "USD",
@@ -30,31 +32,40 @@
       "nombre": "Paralelo",
       "compra": null,
       "venta": null,
-      "promedio": 955.8631,
-      "fechaActualizacion": "2026-09-30T15:00:00.000Z"
+      "promedio": 954.1634,
+      "fechaActualizacion": "2026-10-01T15:30:11.000Z"
     }
   ]
   ```
 
 - GET /v1/dolares/oficial
-  Retorna únicamente el objeto con la cotización oficial del BCV para USD.
+  Retorna únicamente el objeto con la cotización oficial del BCV para USD vigente para el día.
+
+- GET /v1/dolares/oficial/siguiente
+  Retorna la cotización oficial del BCV para USD del siguiente día hábil (disponible tras la publicación de la tarde del BCV).
 
 - GET /v1/dolares/paralelo
   Retorna únicamente el objeto con la cotización del mercado paralelo para USD.
 
 ### 2. Cotizaciones de Euros
 - GET /v1/euros
-  Retorna una lista con las cotizaciones oficiales (BCV) y paralelas del Euro (EUR) en Bolívares (VES).
+  Retorna una lista con las cotizaciones oficiales vigentes (BCV) y paralelas del Euro (EUR) en Bolívares (VES).
 
 - GET /v1/euros/oficial
-  Retorna únicamente la cotización oficial del BCV para EUR.
+  Retorna únicamente la cotización oficial del BCV para EUR vigente para el día.
+
+- GET /v1/euros/oficial/siguiente
+  Retorna la cotización oficial del BCV para EUR del siguiente día hábil (disponible tras la publicación de la tarde del BCV).
 
 - GET /v1/euros/paralelo
   Retorna únicamente la cotización paralela para EUR.
 
 ### 3. Cotizaciones Oficiales BCV
 - GET /v1/cotizaciones
-  Retorna una lista con las dos monedas oficiales del BCV (Dólar y Euro).
+  Retorna una lista con las dos monedas oficiales del BCV (Dólar y Euro) vigentes para el día.
+
+- GET /v1/cotizaciones/siguiente
+  Retorna una lista con las dos monedas oficiales del BCV para el siguiente día hábil.
 
 ## Fuentes de Datos
 - Oficial: Banco Central de Venezuela (https://www.bcv.org.ve/)
