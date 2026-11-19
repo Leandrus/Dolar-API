@@ -218,13 +218,17 @@ function getRatesWithCache() {
             if (!empty($cached['bcvSiguiente']['fechaValor']) && $todayVET >= $cached['bcvSiguiente']['fechaValor']) {
                 $cached['dolarOficial']['promedio'] = $cached['bcvSiguiente']['usd'];
                 $cached['dolarOficial']['fechaActualizacion'] = $cached['bcvSiguiente']['fecha'];
-                $cached['euroOficial']['promedio'] = $cached['bcvSiguiente']['eur'];
+                if (!empty($cached['bcvSiguiente']['eur'])) {
+                    $cached['euroOficial']['promedio'] = $cached['bcvSiguiente']['eur'];
+                }
                 $cached['euroOficial']['fechaActualizacion'] = $cached['bcvSiguiente']['fecha'];
                 $cached['bcvSiguiente'] = null;
-                $cached['_timestamp'] = $now;
                 $cached['_cached_at'] = date('c');
                 @file_put_contents(CACHE_FILE, json_encode($cached, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
-                return $cached;
+
+                if (isset($cached['_timestamp']) && ($now - $cached['_timestamp'] < CACHE_TTL)) {
+                    return $cached;
+                }
             }
 
             // Si la caché tiene menos de 15 minutos, responder inmediatamente
@@ -236,12 +240,33 @@ function getRatesWithCache() {
 
     // Intentamos extraer datos en vivo
     $bcv = fetchBcv();
+    if ($bcv['usd'] === null || $bcv['eur'] === null || $bcv['fechaValor'] === null) {
+        $fbBcv = fetchBcvFallback();
+        if ($fbBcv) {
+            if ($bcv['usd'] === null && $fbBcv['usd'] !== null) {
+                $bcv['usd'] = $fbBcv['usd'];
+            }
+            if ($bcv['eur'] === null && $fbBcv['eur'] !== null) {
+                $bcv['eur'] = $fbBcv['eur'];
+            }
+            if ($bcv['fechaValor'] === null && $fbBcv['fechaValor'] !== null) {
+                $bcv['fechaValor'] = $fbBcv['fechaValor'];
+                $bcv['fecha'] = $fbBcv['fecha'];
+            }
+        }
+    }
+
     $yadio = fetchYadio();
 
     // 1. Manejo del BCV respetando el día oficial
     $bcvSiguiente = $cached['bcvSiguiente'] ?? null;
+    if (!empty($bcvSiguiente['fechaValor']) && $bcvSiguiente['fechaValor'] <= $todayVET) {
+        $bcvSiguiente = null;
+    }
+
     $dolarOficial = null;
     $euroOficial = null;
+    $bcvFailed = false;
 
     if ($bcv['usd'] !== null && $bcv['fechaValor'] !== null) {
         // ¿La fecha asignada por el BCV es posterior al día de hoy en Venezuela? (publicación de las ~4pm para el día siguiente)
@@ -254,30 +279,71 @@ function getRatesWithCache() {
                 'fechaValor' => $bcv['fechaValor']
             ];
 
-            // Para la entrega actual, mantenemos el valor vigente del día guardado en caché
-            if ($cached && isset($cached['dolarOficial'])) {
+            $cachedBcvDate = isset($cached['dolarOficial']['fechaActualizacion'])
+                ? substr((string)$cached['dolarOficial']['fechaActualizacion'], 0, 10)
+                : '';
+            $hasFreshCachedBcv = (
+                $cached
+                && isset($cached['dolarOficial']['promedio'])
+                && $cached['dolarOficial']['promedio'] !== null
+                && $cachedBcvDate >= $todayVET
+            );
+
+            if ($hasFreshCachedBcv) {
+                // Para la entrega actual, mantenemos el valor vigente del día guardado en caché
                 $dolarOficial = $cached['dolarOficial'];
                 $euroOficial = $cached['euroOficial'];
             } else {
-                // Si no existiera caché previa, usamos el dato disponible como último recurso
-                $dolarOficial = [
-                    'moneda' => 'USD',
-                    'fuente' => 'oficial',
-                    'nombre' => 'Dólar',
-                    'compra' => null,
-                    'venta' => null,
-                    'promedio' => $bcv['usd'],
-                    'fechaActualizacion' => $bcv['fecha']
-                ];
-                $euroOficial = [
-                    'moneda' => 'EUR',
-                    'fuente' => 'oficial',
-                    'nombre' => 'Euro',
-                    'compra' => null,
-                    'venta' => null,
-                    'promedio' => $bcv['eur'],
-                    'fechaActualizacion' => $bcv['fecha']
-                ];
+                // Si la caché previa está obsoleta o vacía, intentar recuperar la tasa oficial vigente de hoy vía respaldo
+                $todayFb = fetchBcvTodayFallback($todayVET);
+                if (
+                    $todayFb !== null
+                    && $todayFb['usd'] !== null
+                    && ($cachedBcvDate === '' || $todayFb['fechaValor'] > $cachedBcvDate || ($cached['dolarOficial']['promedio'] ?? null) === null)
+                ) {
+                    $dolarOficial = [
+                        'moneda' => 'USD',
+                        'fuente' => 'oficial',
+                        'nombre' => 'Dólar',
+                        'compra' => null,
+                        'venta' => null,
+                        'promedio' => $todayFb['usd'],
+                        'fechaActualizacion' => $todayFb['fecha']
+                    ];
+                    $eurVal = $todayFb['eur'] ?? ($cached['euroOficial']['promedio'] ?? $bcv['eur']);
+                    $euroOficial = [
+                        'moneda' => 'EUR',
+                        'fuente' => 'oficial',
+                        'nombre' => 'Euro',
+                        'compra' => null,
+                        'venta' => null,
+                        'promedio' => $eurVal,
+                        'fechaActualizacion' => $todayFb['fecha']
+                    ];
+                } elseif ($cached && isset($cached['dolarOficial']['promedio']) && $cached['dolarOficial']['promedio'] !== null) {
+                    $dolarOficial = $cached['dolarOficial'];
+                    $euroOficial = $cached['euroOficial'];
+                } else {
+                    // Último recurso si no hay caché ni histórico vigente
+                    $dolarOficial = [
+                        'moneda' => 'USD',
+                        'fuente' => 'oficial',
+                        'nombre' => 'Dólar',
+                        'compra' => null,
+                        'venta' => null,
+                        'promedio' => $bcv['usd'],
+                        'fechaActualizacion' => $bcv['fecha']
+                    ];
+                    $euroOficial = [
+                        'moneda' => 'EUR',
+                        'fuente' => 'oficial',
+                        'nombre' => 'Euro',
+                        'compra' => null,
+                        'venta' => null,
+                        'promedio' => $bcv['eur'],
+                        'fechaActualizacion' => $bcv['fecha']
+                    ];
+                }
             }
         } else {
             // La fecha reportada es igual o anterior al día de hoy: es el valor oficial vigente para hoy
@@ -291,19 +357,21 @@ function getRatesWithCache() {
                 'promedio' => $bcv['usd'],
                 'fechaActualizacion' => $bcv['fecha']
             ];
+            $eurVal = $bcv['eur'] ?? ($cached['euroOficial']['promedio'] ?? null);
             $euroOficial = [
                 'moneda' => 'EUR',
                 'fuente' => 'oficial',
                 'nombre' => 'Euro',
                 'compra' => null,
                 'venta' => null,
-                'promedio' => $bcv['eur'],
+                'promedio' => $eurVal,
                 'fechaActualizacion' => $bcv['fecha']
             ];
         }
     } else {
+        $bcvFailed = true;
         // Fallback si el portal BCV no responde o sufre caídas temporales
-        if ($cached && isset($cached['dolarOficial'])) {
+        if ($cached && isset($cached['dolarOficial']['promedio']) && $cached['dolarOficial']['promedio'] !== null) {
             $dolarOficial = $cached['dolarOficial'];
             $euroOficial = $cached['euroOficial'];
         } else {
@@ -329,22 +397,39 @@ function getRatesWithCache() {
         }
     }
 
-    // 2. Manejo de Paralelo (Yadio) con tolerancia a fallos
-    if (!$yadio['usd'] && $cached) {
-        $dolarParalelo = $cached['dolarParalelo'];
-        $euroParalelo = $cached['euroParalelo'];
-    } else {
-        $isoDate = gmdate('Y-m-d\TH:i:s.v\Z');
+    // 2. Manejo de Paralelo (Yadio) de forma independiente con tolerancia a fallos
+    $isoParaleloDate = gmdate('Y-m-d\TH:i:s.v\Z');
+
+    $usdParaleloVal = $yadio['usd'];
+    if ($usdParaleloVal === null || $usdParaleloVal <= 0) {
+        $usdParaleloVal = fetchParaleloFallback();
+    }
+
+    if ($usdParaleloVal !== null && $usdParaleloVal > 0) {
         $dolarParalelo = [
             'moneda' => 'USD',
             'fuente' => 'paralelo',
             'nombre' => 'Paralelo',
             'compra' => null,
             'venta' => null,
-            'promedio' => $yadio['usd'],
-            'fechaActualizacion' => $isoDate
+            'promedio' => $usdParaleloVal,
+            'fechaActualizacion' => $isoParaleloDate
         ];
+    } elseif ($cached && isset($cached['dolarParalelo'])) {
+        $dolarParalelo = $cached['dolarParalelo'];
+    } else {
+        $dolarParalelo = [
+            'moneda' => 'USD',
+            'fuente' => 'paralelo',
+            'nombre' => 'Paralelo',
+            'compra' => null,
+            'venta' => null,
+            'promedio' => null,
+            'fechaActualizacion' => $isoParaleloDate
+        ];
+    }
 
+    if ($yadio['eur'] !== null && $yadio['eur'] > 0) {
         $euroParalelo = [
             'moneda' => 'EUR',
             'fuente' => 'paralelo',
@@ -352,12 +437,27 @@ function getRatesWithCache() {
             'compra' => null,
             'venta' => null,
             'promedio' => $yadio['eur'],
-            'fechaActualizacion' => $isoDate
+            'fechaActualizacion' => $isoParaleloDate
+        ];
+    } elseif ($cached && isset($cached['euroParalelo']['promedio']) && $cached['euroParalelo']['promedio'] !== null) {
+        $euroParalelo = $cached['euroParalelo'];
+    } else {
+        $euroParalelo = [
+            'moneda' => 'EUR',
+            'fuente' => 'paralelo',
+            'nombre' => 'Paralelo',
+            'compra' => null,
+            'venta' => null,
+            'promedio' => null,
+            'fechaActualizacion' => $isoParaleloDate
         ];
     }
 
+    // Si BCV falló en vivo y en respaldo, reintentar en 2 minutos en vez de cachear 15 minutos
+    $effectiveTimestamp = $bcvFailed ? ($now - CACHE_TTL + 120) : $now;
+
     $result = [
-        '_timestamp' => $now,
+        '_timestamp' => $effectiveTimestamp,
         '_cached_at' => date('c'),
         'dolarOficial' => $dolarOficial,
         'dolarParalelo' => $dolarParalelo,
@@ -373,21 +473,41 @@ function getRatesWithCache() {
 }
 
 function fetchUrl($url, $timeout = 10) {
-    if (!function_exists('curl_init')) {
-        return null;
+    $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_CONNECTTIMEOUT => min(6, $timeout),
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_USERAGENT => $userAgent
+        ]);
+        $res = curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($httpCode === 200 && is_string($res) && $res !== '') {
+            return $res;
+        }
     }
 
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => $timeout,
-        CURLOPT_USERAGENT => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    $ctx = stream_context_create([
+        'http' => [
+            'method' => 'GET',
+            'timeout' => $timeout,
+            'header' => "User-Agent: {$userAgent}\r\n"
+        ],
+        'ssl' => [
+            'verify_peer' => false,
+            'verify_peer_name' => false
+        ]
     ]);
-    $res = curl_exec($ch);
-    return $res ?: null;
+    $streamRes = @file_get_contents($url, false, $ctx);
+    return (is_string($streamRes) && $streamRes !== '') ? $streamRes : null;
 }
 
 function extractBcvDate($html) {
@@ -396,35 +516,46 @@ function extractBcvDate($html) {
     }
 
     // 1. Extraer específicamente la 'Fecha Valor' indicada por el BCV
-    if (preg_match('/Fecha\s*Valor:[\s\S]*?<span[^>]*class="date-display-single"[^>]*content="([^"]+)"/i', $html, $m)) {
+    if (preg_match('/Fecha\s*Valor:[\s\S]{0,400}?content=["\'](\d{4}-\d{2}-\d{2}[^"\']*)["\']/i', $html, $m)) {
         $raw = trim($m[1]);
         if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $raw, $mDate)) {
             return ['iso' => $raw, 'ymd' => $mDate[1]];
         }
     }
 
-    // 2. Extraer mediante atributo content en date-display-single general
-    if (preg_match('/class="date-display-single"[^>]*content="([^"]+)"/i', $html, $m)) {
+    // 2. Extraer mediante atributo content cuando class aparece antes de content
+    if (preg_match('/<span[^>]*class=["\'][^"\']*date-display-single[^"\']*["\'][^>]*content=["\'](\d{4}-\d{2}-\d{2}[^"\']*)["\']/i', $html, $m)) {
         $raw = trim($m[1]);
         if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $raw, $mDate)) {
             return ['iso' => $raw, 'ymd' => $mDate[1]];
         }
     }
 
-    // 3. Extraer mediante texto visible como respaldo (ej: "Jueves, 01 Octubre 2026")
-    if (preg_match('/class="date-display-single"[^>]*>\s*([^<]+)\s*<\/span>/i', $html, $m)) {
+    // 3. Extraer mediante atributo content cuando content aparece antes de class (estructura actual BCV)
+    if (preg_match('/<span[^>]*content=["\'](\d{4}-\d{2}-\d{2}[^"\']*)["\'][^>]*class=["\'][^"\']*date-display-single[^"\']*["\']/i', $html, $m)) {
+        $raw = trim($m[1]);
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $raw, $mDate)) {
+            return ['iso' => $raw, 'ymd' => $mDate[1]];
+        }
+    }
+
+    // 4. Extraer mediante texto visible como respaldo (ej: "Jueves, 19 Noviembre 2026")
+    if (preg_match('/class=["\'][^"\']*date-display-single[^"\']*["\'][^>]*>\s*([^<]+)\s*<\/span>/i', $html, $m)) {
         $text = trim($m[1]);
         $meses = [
             'enero' => '01', 'febrero' => '02', 'marzo' => '03', 'abril' => '04',
             'mayo' => '05', 'junio' => '06', 'julio' => '07', 'agosto' => '08',
-            'septiembre' => '09', 'octubre' => '10', 'noviembre' => '11', 'diciembre' => '12'
+            'septiembre' => '09', 'setiembre' => '09', 'octubre' => '10',
+            'noviembre' => '11', 'diciembre' => '12'
         ];
         if (preg_match('/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/i', $text, $mPartes)) {
             $dia = str_pad($mPartes[1], 2, '0', STR_PAD_LEFT);
-            $mes = $meses[strtolower($mPartes[2])] ?? '01';
+            $mes = $meses[strtolower($mPartes[2])] ?? null;
             $anio = $mPartes[3];
-            $ymd = "$anio-$mes-$dia";
-            return ['iso' => "{$ymd}T00:00:00-04:00", 'ymd' => $ymd];
+            if ($mes !== null) {
+                $ymd = "$anio-$mes-$dia";
+                return ['iso' => "{$ymd}T00:00:00-04:00", 'ymd' => $ymd];
+            }
         }
     }
 
@@ -440,19 +571,19 @@ function fetchBcv() {
     // Fecha reportada por el BCV
     $dateInfo = extractBcvDate($html);
 
-    // USD
+    // USD (resiliente a atributos como style="..." y class="strong-tb")
     $usd = null;
-    if (preg_match('/<span>\s*USD\s*<\/span>.*?<strong[^>]*>\s*([0-9.,]+)\s*<\/strong>/s', $html, $mUsd)) {
+    if (preg_match('/id=["\']dolar["\'][\s\S]{0,1200}?<strong[^>]*>\s*([0-9.,]+)\s*<\/strong>/i', $html, $mUsd)) {
         $usd = cleanNumber($mUsd[1]);
-    } elseif (preg_match('/id=["\']dolar["\'][\s\S]*?<strong>\s*([0-9.,]+)\s*<\/strong>/i', $html, $mUsd)) {
+    } elseif (preg_match('/<span[^>]*>\s*USD\s*<\/span>[\s\S]{0,600}?<strong[^>]*>\s*([0-9.,]+)\s*<\/strong>/i', $html, $mUsd)) {
         $usd = cleanNumber($mUsd[1]);
     }
 
-    // EUR
+    // EUR (resiliente a atributos como style="..." y class="strong-tb")
     $eur = null;
-    if (preg_match('/<span>\s*EUR\s*<\/span>.*?<strong[^>]*>\s*([0-9.,]+)\s*<\/strong>/s', $html, $mEur)) {
+    if (preg_match('/id=["\']euro["\'][\s\S]{0,1200}?<strong[^>]*>\s*([0-9.,]+)\s*<\/strong>/i', $html, $mEur)) {
         $eur = cleanNumber($mEur[1]);
-    } elseif (preg_match('/id=["\']euro["\'][\s\S]*?<strong>\s*([0-9.,]+)\s*<\/strong>/i', $html, $mEur)) {
+    } elseif (preg_match('/<span[^>]*>\s*EUR\s*<\/span>[\s\S]{0,600}?<strong[^>]*>\s*([0-9.,]+)\s*<\/strong>/i', $html, $mEur)) {
         $eur = cleanNumber($mEur[1]);
     }
 
@@ -462,6 +593,103 @@ function fetchBcv() {
         'usd' => $usd,
         'eur' => $eur
     ];
+}
+
+function fetchBcvFallback() {
+    $raw = fetchUrl('https://ve.dolarapi.com/v1/cotizaciones', 10);
+    $items = $raw ? json_decode($raw, true) : null;
+    if (!is_array($items)) {
+        return null;
+    }
+
+    $usd = null;
+    $eur = null;
+    $fecha = null;
+    $fechaValor = null;
+
+    foreach ($items as $item) {
+        if (!is_array($item) || ($item['fuente'] ?? '') !== 'oficial') {
+            continue;
+        }
+        $val = $item['promedio'] ?? null;
+        if (!is_numeric($val) || (float)$val <= 0) {
+            continue;
+        }
+        $moneda = strtoupper((string)($item['moneda'] ?? ''));
+        $rawFecha = $item['fechaActualizacion'] ?? null;
+        if ($rawFecha && preg_match('/^(\d{4}-\d{2}-\d{2})/', (string)$rawFecha, $mDate)) {
+            if ($fechaValor === null) {
+                $fecha = (string)$rawFecha;
+                $fechaValor = $mDate[1];
+            }
+        }
+        if ($moneda === 'USD') {
+            $usd = (float)$val;
+        } elseif ($moneda === 'EUR') {
+            $eur = (float)$val;
+        }
+    }
+
+    if ($usd === null || $fechaValor === null) {
+        return null;
+    }
+
+    return [
+        'fecha' => $fecha,
+        'fechaValor' => $fechaValor,
+        'usd' => $usd,
+        'eur' => $eur
+    ];
+}
+
+function fetchBcvTodayFallback($todayVET) {
+    $fb = fetchBcvFallback();
+    if ($fb !== null && $fb['fechaValor'] !== null && $fb['fechaValor'] <= $todayVET) {
+        return $fb;
+    }
+
+    $rawHist = fetchUrl('https://ve.dolarapi.com/v1/historicos/dolares/oficial', 12);
+    $hist = $rawHist ? json_decode($rawHist, true) : null;
+    if (!is_array($hist)) {
+        return null;
+    }
+
+    $bestDate = null;
+    $bestUsd = null;
+    foreach ($hist as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $fecha = isset($item['fecha']) ? substr((string)$item['fecha'], 0, 10) : '';
+        $val = $item['promedio'] ?? null;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) || $fecha > $todayVET || !is_numeric($val) || (float)$val <= 0) {
+            continue;
+        }
+        if ($bestDate === null || $fecha > $bestDate) {
+            $bestDate = $fecha;
+            $bestUsd = (float)$val;
+        }
+    }
+
+    if ($bestDate === null || $bestUsd === null) {
+        return null;
+    }
+
+    return [
+        'fecha' => $bestDate . 'T00:00:00-04:00',
+        'fechaValor' => $bestDate,
+        'usd' => $bestUsd,
+        'eur' => null
+    ];
+}
+
+function fetchParaleloFallback() {
+    $raw = fetchUrl('https://ve.dolarapi.com/v1/dolares/paralelo', 10);
+    $json = $raw ? json_decode($raw, true) : null;
+    if (is_array($json) && isset($json['promedio']) && is_numeric($json['promedio']) && (float)$json['promedio'] > 0) {
+        return (float)$json['promedio'];
+    }
+    return null;
 }
 
 function fetchYadio() {
